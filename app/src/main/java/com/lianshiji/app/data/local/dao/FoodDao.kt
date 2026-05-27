@@ -26,6 +26,9 @@ interface FoodDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(food: FoodEntryEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(foods: List<FoodEntryEntity>)
+
     @Update
     suspend fun update(food: FoodEntryEntity)
 
@@ -34,4 +37,16 @@ interface FoodDao {
 
     @Query("DELETE FROM food_entries WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query(
+        """
+        SELECT * FROM food_entries
+        WHERE timestamp >= :startMillis AND timestamp < :endMillis
+        ORDER BY timestamp ASC
+        """
+    )
+    suspend fun listByTimeRange(startMillis: Long, endMillis: Long): List<FoodEntryEntity>
+
+    @Query("DELETE FROM food_entries")
+    suspend fun deleteAll()
 }

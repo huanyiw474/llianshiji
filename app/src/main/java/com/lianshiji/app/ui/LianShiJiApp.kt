@@ -1,7 +1,22 @@
 package com.lianshiji.app.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,40 +41,52 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -71,7 +98,9 @@ import com.lianshiji.app.data.local.entity.FoodEntryEntity
 import com.lianshiji.app.data.local.entity.TrainingEntryEntity
 import com.lianshiji.app.util.DateTimeUtils
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun LianShiJiApp(viewModel: MainViewModel) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestination.Dashboard) }
@@ -86,10 +115,12 @@ fun LianShiJiApp(viewModel: MainViewModel) {
     val exercises by viewModel.exercises.collectAsState()
     val foodForm by viewModel.foodForm.collectAsState()
     val trainingForm by viewModel.trainingForm.collectAsState()
+    val goalForm by viewModel.goalForm.collectAsState()
     val isFoodDialogOpen by viewModel.isFoodDialogOpen.collectAsState()
     val isTrainingDialogOpen by viewModel.isTrainingDialogOpen.collectAsState()
 
     Scaffold(
+        containerColor = Color.Transparent,
         floatingActionButton = {
             when (currentDestination) {
                 AppDestination.Food -> {
@@ -106,7 +137,10 @@ fun LianShiJiApp(viewModel: MainViewModel) {
             }
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = Color(0xFF102116),
+                tonalElevation = 8.dp
+            ) {
                 AppDestination.entries.forEach { destination ->
                     NavigationBarItem(
                         selected = currentDestination == destination,
@@ -117,7 +151,14 @@ fun LianShiJiApp(viewModel: MainViewModel) {
                                 contentDescription = destination.label
                             )
                         },
-                        label = { Text(destination.label, maxLines = 1) }
+                        label = { Text(destination.label, maxLines = 1) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF0E2418),
+                            selectedTextColor = Color(0xFFDFF5D4),
+                            unselectedIconColor = Color.White.copy(alpha = 0.58f),
+                            unselectedTextColor = Color.White.copy(alpha = 0.58f),
+                            indicatorColor = Color(0xFFDFF5D4)
+                        )
                     )
                 }
             }
@@ -128,36 +169,61 @@ fun LianShiJiApp(viewModel: MainViewModel) {
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when (currentDestination) {
-                AppDestination.Dashboard -> DashboardPage(dashboard)
-                AppDestination.Food -> FoodPage(
-                    selectedDate = selectedDate,
-                    totals = selectedTotals,
-                    foods = selectedFoods,
-                    onPreviousDay = viewModel::selectPreviousDay,
-                    onNextDay = viewModel::selectNextDay,
-                    onToday = viewModel::selectToday,
-                    onAdd = viewModel::openNewFoodForm,
-                    onEdit = viewModel::openEditFoodForm,
-                    onDelete = viewModel::deleteFood
-                )
-                AppDestination.Training -> TrainingPage(
-                    selectedDate = selectedDate,
-                    selectedTrainings = selectedTrainings,
-                    allTrainings = allTrainings,
-                    onPreviousDay = viewModel::selectPreviousDay,
-                    onNextDay = viewModel::selectNextDay,
-                    onToday = viewModel::selectToday,
-                    onAdd = viewModel::openNewTrainingForm,
-                    onEdit = viewModel::openEditTrainingForm,
-                    onDelete = viewModel::deleteTraining
-                )
-                AppDestination.Exercises -> ExerciseLibraryPage(exercises)
-                AppDestination.Me -> MinePage(
-                    dashboard = dashboard,
-                    foodCount = allFoods.size,
-                    trainingCount = allTrainings.size
-                )
+            AnimatedContent(
+                targetState = currentDestination,
+                transitionSpec = {
+                    (fadeIn(tween(180)) + slideInHorizontally { it / 10 }) togetherWith
+                        (fadeOut(tween(120)) + slideOutHorizontally { -it / 12 })
+                },
+                label = "page_switch"
+            ) { destination ->
+                when (destination) {
+                    AppDestination.Dashboard -> DashboardPage(
+                        state = dashboard,
+                        onAddFood = {
+                            viewModel.selectToday()
+                            viewModel.openNewFoodForm()
+                        },
+                        onAddTraining = {
+                            viewModel.selectToday()
+                            viewModel.openNewTrainingForm()
+                        }
+                    )
+                    AppDestination.Food -> FoodPage(
+                        selectedDate = selectedDate,
+                        totals = selectedTotals,
+                        foods = selectedFoods,
+                        onPreviousDay = viewModel::selectPreviousDay,
+                        onNextDay = viewModel::selectNextDay,
+                        onToday = viewModel::selectToday,
+                        onAdd = viewModel::openNewFoodForm,
+                        onCopyYesterday = viewModel::copyYesterdayFoods,
+                        onEdit = viewModel::openEditFoodForm,
+                        onDelete = viewModel::deleteFood
+                    )
+                    AppDestination.Training -> TrainingPage(
+                        selectedDate = selectedDate,
+                        selectedTrainings = selectedTrainings,
+                        allTrainings = allTrainings,
+                        onPreviousDay = viewModel::selectPreviousDay,
+                        onNextDay = viewModel::selectNextDay,
+                        onToday = viewModel::selectToday,
+                        onAdd = viewModel::openNewTrainingForm,
+                        onCopyLast = viewModel::copyLastTraining,
+                        onEdit = viewModel::openEditTrainingForm,
+                        onDelete = viewModel::deleteTraining
+                    )
+                    AppDestination.Exercises -> ExerciseLibraryPage(exercises)
+                    AppDestination.Me -> MinePage(
+                        dashboard = dashboard,
+                        foodCount = allFoods.size,
+                        trainingCount = allTrainings.size,
+                        goalForm = goalForm,
+                        onGoalFormChange = viewModel::updateGoalForm,
+                        onSaveGoals = viewModel::saveGoals,
+                        onClearUserData = viewModel::clearUserData
+                    )
+                }
             }
         }
     }
@@ -166,6 +232,7 @@ fun LianShiJiApp(viewModel: MainViewModel) {
         FoodEntryDialog(
             form = foodForm,
             onFormChange = viewModel::updateFoodForm,
+            onSelectCommonFood = viewModel::applyCommonFood,
             onDismiss = viewModel::dismissFoodForm,
             onSave = viewModel::saveFood
         )
@@ -174,7 +241,9 @@ fun LianShiJiApp(viewModel: MainViewModel) {
     if (isTrainingDialogOpen) {
         TrainingEntryDialog(
             form = trainingForm,
+            exercises = exercises,
             onFormChange = viewModel::updateTrainingForm,
+            onSelectExercise = viewModel::applyExerciseToTrainingForm,
             onDismiss = viewModel::dismissTrainingForm,
             onSave = viewModel::saveTraining
         )
@@ -192,110 +261,422 @@ private enum class AppDestination(
     Me("我的", Icons.Outlined.Person)
 }
 
+private val AppCardShape = RoundedCornerShape(16.dp)
+private val AppPillShape = RoundedCornerShape(999.dp)
+
 @Composable
-private fun DashboardPage(state: DashboardUiState) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+private fun cardShadow() = CardDefaults.cardElevation(defaultElevation = 9.dp)
+
+@Composable
+private fun CardEntrance(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(260)) + slideInVertically(tween(260)) { it / 8 },
+        modifier = modifier
     ) {
-        item {
-            PageHeader(
-                title = "练食记",
-                subtitle = "${state.todayLabel} · 饮食与训练记录"
+        content()
+    }
+}
+
+@Composable
+private fun AppButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = tween(120),
+        label = "button_press_scale"
+    )
+
+    Button(
+        onClick = onClick,
+        modifier = modifier
+            .height(54.dp)
+            .scale(scale),
+        shape = AppPillShape,
+        interactionSource = interactionSource,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun AppOutlinedButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = tween(120),
+        label = "outlined_button_press_scale"
+    )
+
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier
+            .height(54.dp)
+            .scale(scale),
+        shape = AppPillShape,
+        interactionSource = interactionSource,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun PillTag(
+    text: String,
+    icon: ImageVector? = null,
+    containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer
+) {
+    Surface(
+        shape = AppPillShape,
+        color = containerColor
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            icon?.let {
+                Icon(it, contentDescription = null, modifier = Modifier.size(14.dp), tint = contentColor)
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor
             )
         }
+    }
+}
+
+@Composable
+private fun DashboardPage(
+    state: DashboardUiState,
+    onAddFood: () -> Unit,
+    onAddTraining: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF102116),
+                        Color(0xFF1F4D33),
+                        Color(0xFFF4F8F1)
+                    )
+                )
+            ),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         item {
-            Card(
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "今日摄入",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        text = "${state.calories} kcal",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        text = state.trainingStatus,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+            DashboardHeader(date = state.todayLabel)
+        }
+        item {
+            CardEntrance {
+                GoalProgressCard(state)
             }
         }
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                MacroCard(
-                    label = "蛋白质",
-                    value = "${state.protein.trimmedString()} g",
-                    color = Color(0xFF2F6B4F),
-                    modifier = Modifier.weight(1f)
-                )
-                MacroCard(
-                    label = "碳水",
-                    value = "${state.carbs.trimmedString()} g",
-                    color = Color(0xFF2F5F8F),
-                    modifier = Modifier.weight(1f)
-                )
-                MacroCard(
-                    label = "脂肪",
-                    value = "${state.fat.trimmedString()} g",
-                    color = Color(0xFF8A5D19),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-        item {
-            OutlinedCard(
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            CardEntrance {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column {
-                        Text("连续记录", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "包含饮食或训练任一记录",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        text = "${state.streakDays} 天",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                    AppButton(
+                        text = "记饮食",
+                        icon = Icons.Outlined.Restaurant,
+                        onClick = onAddFood,
+                        modifier = Modifier.weight(1f)
+                    )
+                    AppOutlinedButton(
+                        text = "记训练",
+                        icon = Icons.Outlined.FitnessCenter,
+                        onClick = onAddTraining,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
         item {
-            SectionTitle("今日建议")
+            CardEntrance {
+                TodayRemainingCard(state.remainingItems)
+            }
         }
-        items(state.suggestions) { suggestion ->
+        item {
+            SectionTitle("建议")
+        }
+        items(state.suggestions.take(2)) { suggestion ->
             SuggestionRow(text = suggestion)
         }
+    }
+}
+
+@Composable
+private fun DashboardHeader(date: String) {
+    Column(
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        PillTag(
+            text = date,
+            icon = Icons.Outlined.Home,
+            containerColor = Color.White.copy(alpha = 0.14f),
+            contentColor = Color.White
+        )
+        Text(
+            text = "练食记",
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Black,
+            color = Color.White
+        )
+        Text(
+            text = "Eat clean. Train steady.",
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White.copy(alpha = 0.72f)
+        )
+    }
+}
+
+@Composable
+private fun GoalProgressCard(state: DashboardUiState) {
+    Card(
+        shape = AppCardShape,
+        elevation = cardShadow(),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.Transparent
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF0B1C13),
+                            Color(0xFF245D3C),
+                            Color(0xFF8CCB6E)
+                        )
+                    )
+                )
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CompletionCircle(progress = state.overallCompletion)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PillTag(
+                            text = "TODAY SCORE",
+                            icon = Icons.Outlined.FitnessCenter,
+                            containerColor = Color.White.copy(alpha = 0.22f),
+                            contentColor = Color.White
+                        )
+                        Text(
+                            text = state.motivationText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "连续 ${state.streakDays} 天 · ${state.trainingStatus}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.86f)
+                        )
+                        Text(
+                            text = "${state.calories}/${state.calorieTarget} kcal",
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                    }
+                }
+                ProgressLine(
+                    label = "热量",
+                    current = state.calories.toFloat(),
+                    target = state.calorieTarget.toFloat(),
+                    unit = "kcal",
+                    color = Color.White
+                )
+                ProgressLine(
+                    label = "蛋白",
+                    current = state.protein,
+                    target = state.proteinTarget,
+                    unit = "g",
+                    color = Color(0xFFE7F7D9)
+                )
+                ProgressLine(
+                    label = "碳水",
+                    current = state.carbs,
+                    target = state.carbsTarget,
+                    unit = "g",
+                    color = Color(0xFFD5EAFE)
+                )
+                ProgressLine(
+                    label = "脂肪",
+                    current = state.fat,
+                    target = state.fatTarget,
+                    unit = "g",
+                    color = Color(0xFFFFE0A6)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompletionCircle(progress: Float) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(650),
+        label = "completion_progress"
+    )
+    Box(
+        modifier = Modifier.size(142.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier.fillMaxSize(),
+            strokeWidth = 12.dp,
+            color = Color.White,
+            trackColor = Color.White.copy(alpha = 0.22f)
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "${(animatedProgress * 100).roundToInt()}%",
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Black,
+                color = Color.White
+            )
+            Text(
+                text = "完成",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White.copy(alpha = 0.85f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TodayRemainingCard(items: List<String>) {
+    Card(
+        shape = AppCardShape,
+        elevation = cardShadow(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.FitnessCenter,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "还差",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            if (items.isEmpty()) {
+                Text(
+                    text = "今日目标已完成",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            } else {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items.forEach { item ->
+                        PillTag(
+                            text = item,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProgressLine(
+    label: String,
+    current: Float,
+    target: Float,
+    unit: String,
+    color: Color
+) {
+    val progress = if (target <= 0f) 0f else (current / target).coerceIn(0f, 1f)
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.9f)
+            )
+            Text(
+                text = "${current.trimmedString()} / ${target.trimmedString()} $unit",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White.copy(alpha = 0.9f)
+            )
+        }
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp),
+            color = color,
+            trackColor = Color.White.copy(alpha = 0.24f)
+        )
     }
 }
 
@@ -308,13 +689,18 @@ private fun FoodPage(
     onNextDay: () -> Unit,
     onToday: () -> Unit,
     onAdd: () -> Unit,
+    onCopyYesterday: () -> Unit,
     onEdit: (FoodEntryEntity) -> Unit,
     onDelete: (FoodEntryEntity) -> Unit
 ) {
+    val groupedFoods = MealType.entries
+        .map { it.label to foods.filter { food -> food.mealType == it.label } }
+        .filter { it.second.isNotEmpty() }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
             PageHeader(title = "饮食", subtitle = "记录每一餐和三大营养素")
@@ -331,13 +717,22 @@ private fun FoodPage(
             NutritionSummary(totals = totals)
         }
         item {
-            Button(
-                onClick = onAdd,
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(Icons.Outlined.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("添加一餐")
+                AppButton(
+                    text = "添加",
+                    icon = Icons.Outlined.Add,
+                    onClick = onAdd,
+                    modifier = Modifier.weight(1f)
+                )
+                AppOutlinedButton(
+                    text = "复制昨天",
+                    icon = Icons.Outlined.ContentCopy,
+                    onClick = onCopyYesterday,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
         if (foods.isEmpty()) {
@@ -345,14 +740,43 @@ private fun FoodPage(
                 EmptyState(text = "这一天还没有饮食记录")
             }
         } else {
-            items(foods, key = { it.id }) { food ->
-                FoodEntryCard(
-                    food = food,
-                    onEdit = { onEdit(food) },
-                    onDelete = { onDelete(food) }
-                )
+            groupedFoods.forEach { (mealType, mealFoods) ->
+                item {
+                    MealGroupHeader(mealType, NutritionTotals.from(mealFoods))
+                }
+                items(mealFoods, key = { it.id }) { food ->
+                    CardEntrance {
+                        FoodEntryCard(
+                            food = food,
+                            onEdit = { onEdit(food) },
+                            onDelete = { onDelete(food) }
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun MealGroupHeader(mealType: String, totals: NutritionTotals) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = mealType,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = "${totals.calories} kcal · 蛋白 ${totals.protein.trimmedString()}g",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -365,6 +789,7 @@ private fun TrainingPage(
     onNextDay: () -> Unit,
     onToday: () -> Unit,
     onAdd: () -> Unit,
+    onCopyLast: () -> Unit,
     onEdit: (TrainingEntryEntity) -> Unit,
     onDelete: (TrainingEntryEntity) -> Unit
 ) {
@@ -372,8 +797,8 @@ private fun TrainingPage(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
             PageHeader(title = "训练", subtitle = "按日期记录动作、组数、次数和重量")
@@ -387,13 +812,22 @@ private fun TrainingPage(
             )
         }
         item {
-            Button(
-                onClick = onAdd,
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(Icons.Outlined.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("添加训练动作")
+                AppButton(
+                    text = "添加",
+                    icon = Icons.Outlined.Add,
+                    onClick = onAdd,
+                    modifier = Modifier.weight(1f)
+                )
+                AppOutlinedButton(
+                    text = "复制上次",
+                    icon = Icons.Outlined.ContentCopy,
+                    onClick = onCopyLast,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
         item {
@@ -405,11 +839,13 @@ private fun TrainingPage(
             }
         } else {
             items(selectedTrainings, key = { it.id }) { training ->
-                TrainingEntryCard(
-                    training = training,
-                    onEdit = { onEdit(training) },
-                    onDelete = { onDelete(training) }
-                )
+                CardEntrance {
+                    TrainingEntryCard(
+                        training = training,
+                        onEdit = { onEdit(training) },
+                        onDelete = { onDelete(training) }
+                    )
+                }
             }
         }
         item {
@@ -421,7 +857,9 @@ private fun TrainingPage(
             }
         } else {
             items(groupedHistory.entries.toList().take(20), key = { it.key }) { entry ->
-                HistoryTrainingCard(date = entry.key, trainings = entry.value)
+                CardEntrance {
+                    HistoryTrainingCard(date = entry.key, trainings = entry.value)
+                }
             }
         }
     }
@@ -429,19 +867,59 @@ private fun TrainingPage(
 
 @Composable
 private fun ExerciseLibraryPage(exercises: List<ExerciseEntity>) {
-    val grouped = exercises.groupBy { it.targetMuscle }
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedPart by rememberSaveable { mutableStateOf("全部") }
+    var selectedExercise by remember { mutableStateOf<ExerciseEntity?>(null) }
+
+    val partOptions = listOf("全部", "胸", "背", "腿", "肩", "手臂", "核心")
+    val filteredExercises = exercises.filter { exercise ->
+        val matchesQuery = query.isBlank() ||
+            exercise.name.contains(query.trim(), ignoreCase = true) ||
+            exercise.targetMuscle.contains(query.trim(), ignoreCase = true)
+        val matchesPart = selectedPart == "全部" ||
+            exercise.targetMuscle.contains(selectedPart) ||
+            (selectedPart == "腿" && exercise.targetMuscle.contains("后链"))
+        matchesQuery && matchesPart
+    }
+    val grouped = filteredExercises.groupBy { it.targetMuscle }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
             PageHeader(title = "动作库", subtitle = "内置基础训练动作")
         }
+        item {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text("搜索动作或肌群") },
+                leadingIcon = {
+                    Icon(Icons.Outlined.Search, contentDescription = null)
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        item {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                partOptions.forEach { part ->
+                    FilterChip(
+                        selected = selectedPart == part,
+                        onClick = { selectedPart = part },
+                        label = { Text(part) }
+                    )
+                }
+            }
+        }
         if (grouped.isEmpty()) {
             item {
-                EmptyState(text = "动作库正在初始化")
+                EmptyState(text = if (exercises.isEmpty()) "动作库正在初始化" else "没有匹配的动作")
             }
         } else {
             grouped.forEach { (target, exerciseItems) ->
@@ -449,10 +927,22 @@ private fun ExerciseLibraryPage(exercises: List<ExerciseEntity>) {
                     SectionTitle(target)
                 }
                 items(exerciseItems, key = { it.name }) { exercise ->
-                    ExerciseCard(exercise)
+                    CardEntrance {
+                        ExerciseCard(
+                            exercise = exercise,
+                            onClick = { selectedExercise = exercise }
+                        )
+                    }
                 }
             }
         }
+    }
+
+    selectedExercise?.let { exercise ->
+        ExerciseDetailDialog(
+            exercise = exercise,
+            onDismiss = { selectedExercise = null }
+        )
     }
 }
 
@@ -460,19 +950,26 @@ private fun ExerciseLibraryPage(exercises: List<ExerciseEntity>) {
 private fun MinePage(
     dashboard: DashboardUiState,
     foodCount: Int,
-    trainingCount: Int
+    trainingCount: Int,
+    goalForm: GoalFormState,
+    onGoalFormChange: (GoalFormState) -> Unit,
+    onSaveGoals: () -> Unit,
+    onClearUserData: () -> Unit
 ) {
+    var showClearConfirm by rememberSaveable { mutableStateOf(false) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
             PageHeader(title = "我的", subtitle = "本地记录，不含登录和云同步")
         }
         item {
             OutlinedCard(
-                shape = RoundedCornerShape(8.dp),
+                shape = AppCardShape,
+                elevation = cardShadow(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -489,23 +986,135 @@ private fun MinePage(
         }
         item {
             OutlinedCard(
-                shape = RoundedCornerShape(8.dp),
+                shape = AppCardShape,
+                elevation = cardShadow(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("MVP 范围", style = MaterialTheme.typography.titleMedium)
+                    Text("每日目标", style = MaterialTheme.typography.titleMedium)
+                    goalForm.error?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GoalNumberField(
+                            value = goalForm.dailyCalories,
+                            label = "热量",
+                            onValueChange = { onGoalFormChange(goalForm.copy(dailyCalories = it)) },
+                            modifier = Modifier.weight(1f),
+                            keyboardType = KeyboardType.Number
+                        )
+                        GoalNumberField(
+                            value = goalForm.proteinGrams,
+                            label = "蛋白 g",
+                            onValueChange = { onGoalFormChange(goalForm.copy(proteinGrams = it)) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GoalNumberField(
+                            value = goalForm.carbsGrams,
+                            label = "碳水 g",
+                            onValueChange = { onGoalFormChange(goalForm.copy(carbsGrams = it)) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        GoalNumberField(
+                            value = goalForm.fatGrams,
+                            label = "脂肪 g",
+                            onValueChange = { onGoalFormChange(goalForm.copy(fatGrams = it)) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    GoalNumberField(
+                        value = goalForm.weeklyTrainingCount,
+                        label = "每周训练次数",
+                        onValueChange = { onGoalFormChange(goalForm.copy(weeklyTrainingCount = it)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardType = KeyboardType.Number
+                    )
+                    AppButton(
+                        text = "保存目标",
+                        icon = Icons.Outlined.FitnessCenter,
+                        onClick = onSaveGoals,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+        item {
+            OutlinedCard(
+                shape = AppCardShape,
+                elevation = cardShadow(),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("数据管理", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "当前版本只使用本地 Room 数据库，先专注饮食和训练记录闭环。",
+                        text = "清除会删除饮食和训练记录，并把目标恢复默认值。动作库会保留。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    AppOutlinedButton(
+                        text = "清除本地数据",
+                        icon = Icons.Outlined.RestartAlt,
+                        onClick = { showClearConfirm = true },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
         }
     }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("确认清除数据？") },
+            text = { Text("此操作会删除所有饮食和训练记录，并重置目标设置。") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onClearUserData()
+                        showClearConfirm = false
+                    }
+                ) {
+                    Text("确认清除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun GoalNumberField(
+    value: String,
+    label: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    keyboardType: KeyboardType = KeyboardType.Decimal
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -531,8 +1140,10 @@ private fun DateSelector(
     onNextDay: () -> Unit,
     onToday: () -> Unit
 ) {
-    OutlinedCard(
-        shape = RoundedCornerShape(8.dp),
+    Card(
+        shape = AppCardShape,
+        elevation = cardShadow(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -567,8 +1178,10 @@ private fun DateSelector(
 
 @Composable
 private fun NutritionSummary(totals: NutritionTotals) {
-    OutlinedCard(
-        shape = RoundedCornerShape(8.dp),
+    Card(
+        shape = AppCardShape,
+        elevation = cardShadow(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -608,7 +1221,8 @@ private fun MacroCard(
     modifier: Modifier = Modifier
 ) {
     OutlinedCard(
-        shape = RoundedCornerShape(8.dp),
+        shape = AppCardShape,
+        elevation = cardShadow(),
         border = BorderStroke(1.dp, color.copy(alpha = 0.25f)),
         modifier = modifier.heightIn(min = 92.dp)
     ) {
@@ -641,8 +1255,10 @@ private fun FoodEntryCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    OutlinedCard(
-        shape = RoundedCornerShape(8.dp),
+    Card(
+        shape = AppCardShape,
+        elevation = cardShadow(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -656,6 +1272,13 @@ private fun FoodEntryCard(
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.Restaurant,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = food.name,
                         style = MaterialTheme.typography.titleMedium,
@@ -665,10 +1288,10 @@ private fun FoodEntryCard(
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(
+                    PillTag(
                         text = food.mealType,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
                 Text(
@@ -699,7 +1322,8 @@ private fun TrainingEntryCard(
     onDelete: () -> Unit
 ) {
     OutlinedCard(
-        shape = RoundedCornerShape(8.dp),
+        shape = AppCardShape,
+        elevation = cardShadow(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -712,13 +1336,22 @@ private fun TrainingEntryCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                Text(
-                    text = training.exerciseName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.FitnessCenter,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = training.exerciseName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Text(
                     text = "${training.bodyPart} · ${training.sets} 组 x ${training.reps} 次 · ${training.weightKg.trimmedString()} kg",
                     style = MaterialTheme.typography.bodyMedium,
@@ -747,8 +1380,12 @@ private fun HistoryTrainingCard(
     date: String,
     trainings: List<TrainingEntryEntity>
 ) {
+    val bodyParts = trainings.map { it.bodyPart }.distinct().joinToString(" / ")
+    val totalSets = trainings.sumOf { it.sets }
+
     OutlinedCard(
-        shape = RoundedCornerShape(8.dp),
+        shape = AppCardShape,
+        elevation = cardShadow(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -756,9 +1393,14 @@ private fun HistoryTrainingCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "$date · ${trainings.size} 个动作",
+                text = date,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "$bodyParts · ${trainings.size} 个动作 · $totalSets 组",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
             )
             Text(
                 text = trainings.joinToString("、") { it.exerciseName },
@@ -772,10 +1414,16 @@ private fun HistoryTrainingCard(
 }
 
 @Composable
-private fun ExerciseCard(exercise: ExerciseEntity) {
+private fun ExerciseCard(
+    exercise: ExerciseEntity,
+    onClick: () -> Unit
+) {
     OutlinedCard(
-        shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = AppCardShape,
+        elevation = cardShadow(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -797,6 +1445,11 @@ private fun ExerciseCard(exercise: ExerciseEntity) {
                     color = MaterialTheme.colorScheme.primary
                 )
             }
+            PillTag(
+                text = exercise.targetMuscle,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            )
             Text(exercise.instruction, style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = "常见错误：${exercise.commonMistakes}",
@@ -808,10 +1461,53 @@ private fun ExerciseCard(exercise: ExerciseEntity) {
 }
 
 @Composable
+private fun ExerciseDetailDialog(
+    exercise: ExerciseEntity,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(exercise.name) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                DetailBlock("目标肌群", exercise.targetMuscle)
+                DetailBlock("动作说明", exercise.instruction)
+                DetailBlock("常见错误", exercise.commonMistakes)
+                DetailBlock("建议组数次数", exercise.recommendedSetsReps)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭")
+            }
+        }
+    )
+}
+
+@Composable
+private fun DetailBlock(title: String, body: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
 private fun SuggestionRow(text: String) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
+    Card(
+        shape = AppCardShape,
+        elevation = cardShadow(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
@@ -836,7 +1532,8 @@ private fun SectionTitle(text: String) {
 @Composable
 private fun EmptyState(text: String) {
     OutlinedCard(
-        shape = RoundedCornerShape(8.dp),
+        shape = AppCardShape,
+        elevation = cardShadow(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
@@ -870,6 +1567,7 @@ private fun MineStatRow(label: String, value: String) {
 private fun FoodEntryDialog(
     form: FoodFormState,
     onFormChange: (FoodFormState) -> Unit,
+    onSelectCommonFood: (CommonFoodOption) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit
 ) {
@@ -889,6 +1587,22 @@ private fun FoodEntryDialog(
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
+                }
+                Text(
+                    text = "常用食物",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CommonFoodOptions.forEach { food ->
+                        AssistChip(
+                            onClick = { onSelectCommonFood(food) },
+                            label = { Text(food.name) }
+                        )
+                    }
                 }
                 OutlinedTextField(
                     value = form.name,
@@ -978,7 +1692,9 @@ private fun FoodEntryDialog(
 @Composable
 private fun TrainingEntryDialog(
     form: TrainingFormState,
+    exercises: List<ExerciseEntity>,
     onFormChange: (TrainingFormState) -> Unit,
+    onSelectExercise: (ExerciseEntity) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit
 ) {
@@ -1006,6 +1722,24 @@ private fun TrainingEntryDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (exercises.isNotEmpty()) {
+                    Text(
+                        text = "从动作库选择",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        exercises.forEach { exercise ->
+                            AssistChip(
+                                onClick = { onSelectExercise(exercise) },
+                                label = { Text(exercise.name) }
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = "训练部位",
                     style = MaterialTheme.typography.labelLarge,

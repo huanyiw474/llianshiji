@@ -4,6 +4,7 @@ import com.lianshiji.app.data.local.LianShiJiDatabase
 import com.lianshiji.app.data.local.entity.ExerciseEntity
 import com.lianshiji.app.data.local.entity.FoodEntryEntity
 import com.lianshiji.app.data.local.entity.TrainingEntryEntity
+import com.lianshiji.app.data.local.entity.UserGoalEntity
 import com.lianshiji.app.util.DateTimeUtils
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
@@ -14,8 +15,11 @@ class FitnessRepository(
     private val foodDao = database.foodDao()
     private val trainingDao = database.trainingDao()
     private val exerciseDao = database.exerciseDao()
+    private val userGoalDao = database.userGoalDao()
 
     fun observeAllFoods(): Flow<List<FoodEntryEntity>> = foodDao.observeAll()
+
+    fun observeGoals(): Flow<UserGoalEntity?> = userGoalDao.observeGoals()
 
     fun observeFoodsForDate(date: LocalDate): Flow<List<FoodEntryEntity>> {
         return foodDao.observeByTimeRange(
@@ -39,6 +43,7 @@ class FitnessRepository(
         if (exerciseDao.count() == 0) {
             exerciseDao.insertAll(DefaultExerciseCatalog.items)
         }
+        userGoalDao.insertIfAbsent(UserGoalEntity())
     }
 
     suspend fun saveFood(food: FoodEntryEntity): Long {
@@ -54,6 +59,27 @@ class FitnessRepository(
         foodDao.delete(food)
     }
 
+    suspend fun copyFoodsFromPreviousDay(targetDate: LocalDate): Int {
+        val sourceDate = targetDate.minusDays(1)
+        val sourceFoods = foodDao.listByTimeRange(
+            DateTimeUtils.dayStartMillis(sourceDate),
+            DateTimeUtils.nextDayStartMillis(sourceDate)
+        )
+        if (sourceFoods.isEmpty()) return 0
+
+        val copiedFoods = sourceFoods.map { food ->
+            food.copy(
+                id = 0,
+                timestamp = DateTimeUtils.dateTimeMillis(
+                    targetDate,
+                    DateTimeUtils.formatTime(food.timestamp)
+                )
+            )
+        }
+        foodDao.insertAll(copiedFoods)
+        return copiedFoods.size
+    }
+
     suspend fun saveTraining(training: TrainingEntryEntity): Long {
         return if (training.id == 0L) {
             trainingDao.insert(training)
@@ -65,6 +91,39 @@ class FitnessRepository(
 
     suspend fun deleteTraining(training: TrainingEntryEntity) {
         trainingDao.delete(training)
+    }
+
+    suspend fun copyLastTrainingToDate(targetDate: LocalDate): Int {
+        val beforeTargetDay = DateTimeUtils.dayStartMillis(targetDate)
+        val previousTrainings = trainingDao.listBefore(beforeTargetDay)
+        val latestTrainingDay = previousTrainings.firstOrNull()?.let {
+            DateTimeUtils.toLocalDate(it.performedAt)
+        } ?: return 0
+
+        val sourceTrainings = trainingDao.listByTimeRange(
+            DateTimeUtils.dayStartMillis(latestTrainingDay),
+            DateTimeUtils.nextDayStartMillis(latestTrainingDay)
+        )
+        if (sourceTrainings.isEmpty()) return 0
+
+        val copiedTrainings = sourceTrainings.map { training ->
+            training.copy(
+                id = 0,
+                performedAt = DateTimeUtils.dateAtNoonMillis(targetDate)
+            )
+        }
+        trainingDao.insertAll(copiedTrainings)
+        return copiedTrainings.size
+    }
+
+    suspend fun saveGoals(goals: UserGoalEntity) {
+        userGoalDao.upsert(goals.copy(id = 1))
+    }
+
+    suspend fun clearUserData() {
+        foodDao.deleteAll()
+        trainingDao.deleteAll()
+        userGoalDao.upsert(UserGoalEntity())
     }
 }
 
